@@ -19,7 +19,7 @@ def _make_rec(tmp_path: Path, name: str, sha: str) -> int:
         size_bytes=4,
         duration_secs=None,
         recorded_at=datetime.now(),
-    )
+    ).id
 
 
 def test_fts_search(tmp_path: Path):

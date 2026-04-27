@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 
 from .config import get_settings
-from .db import transaction
+from .db import get_conn, transaction
 from .utils import now_iso
 
 # Pricing in USD per 1M tokens. Update if Anthropic prices change.
@@ -35,10 +35,6 @@ def estimate_cost_usd(model: str, input_tokens: int, output_tokens: int) -> floa
     return round((input_tokens / 1_000_000) * inp + (output_tokens / 1_000_000) * out, 6)
 
 
-def estimate_input_cost_usd(model: str, input_tokens: int, max_output_tokens: int) -> float:
-    return estimate_cost_usd(model, input_tokens, max_output_tokens)
-
-
 @dataclass
 class SpendSummary:
     day: str
@@ -53,8 +49,7 @@ def _today_iso() -> str:
 
 def daily_total_usd(day: str | None = None) -> float:
     day = day or _today_iso()
-    conn = _conn_ro()
-    row = conn.execute(
+    row = get_conn().execute(
         "SELECT COALESCE(SUM(cost_usd), 0.0) FROM spend WHERE day = ?",
         (day,),
     ).fetchone()
@@ -64,12 +59,6 @@ def daily_total_usd(day: str | None = None) -> float:
 def remaining_budget_usd() -> float:
     cap = get_settings().max_daily_claude_usd
     return max(0.0, cap - daily_total_usd())
-
-
-def _conn_ro():
-    from .db import get_conn
-
-    return get_conn()
 
 
 def assert_within_cap(planned_cost_usd: float) -> None:
@@ -100,8 +89,7 @@ def record_spend(
 
 def summary_last_n_days(n: int) -> list[SpendSummary]:
     cutoff = (datetime.now(UTC).date() - timedelta(days=n - 1)).isoformat()
-    conn = _conn_ro()
-    rows = conn.execute(
+    rows = get_conn().execute(
         "SELECT day, "
         "COALESCE(SUM(cost_usd),0) AS total, "
         "COALESCE(SUM(input_tokens),0) AS itok, "

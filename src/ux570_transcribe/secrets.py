@@ -28,9 +28,11 @@ def set_anthropic_key(key: str) -> None:
 
 
 def delete_anthropic_key() -> None:
+    import keyring.errors
+
     try:
         _keyring().delete_password(SERVICE, "anthropic_api_key")
-    except Exception:
+    except keyring.errors.PasswordDeleteError:
         pass
 
 

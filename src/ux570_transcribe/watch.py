@@ -6,7 +6,7 @@ import logging
 import time
 from pathlib import Path
 
-from .archive import Recording
+from .archive import Recording, append_enrichment_to_md, record_enrichment_for_folder
 from .config import get_settings
 from .enrich import get_enricher, load_prompt_template, render_prompt
 from .ingest import detect_mount_point, eject, ingest_from_mount
@@ -21,10 +21,10 @@ def _process_pending(recordings: list[Recording], enrich: bool) -> None:
     logger.info("Pending transcription: %d / %d", len(pending), len(recordings))
     for rec in pending:
         try:
-            txt, srt, md, result = transcribe_recording(rec)
+            _txt, _srt, md, result = transcribe_recording(rec)
             logger.info("Transcribed %s -> %s", rec.archive_path.name, md)
             if enrich:
-                _safe_enrich(md.read_text(encoding="utf-8"), s.default_enrich_backend, s.default_enrich_task, md)
+                _safe_enrich(result.text, s.default_enrich_backend, s.default_enrich_task, md)
         except Exception as e:
             logger.exception("Transcription failed for %s: %s", rec.archive_path, e)
 
@@ -35,13 +35,8 @@ def _safe_enrich(transcript: str, backend: str, task: str, md_path: Path) -> Non
         template = load_prompt_template(task)
         prompt = render_prompt(template, transcript)
         result = enricher.enrich(transcript, prompt, task=task)
-        from .utils import now_iso
-        block = (
-            f"\n\n## Enrichment ({result.backend}, {task}, {now_iso()})\n\n"
-            f"{result.text.strip()}\n"
-        )
-        with md_path.open("a", encoding="utf-8") as f:
-            f.write(block)
+        append_enrichment_to_md(md_path, result.text, result.backend, task)
+        record_enrichment_for_folder(md_path.parent, transcript, result)
     except Exception as e:
         logger.warning("Enrichment skipped: %s", e)
 

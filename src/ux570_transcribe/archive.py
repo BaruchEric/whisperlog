@@ -10,13 +10,14 @@ Layout:
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
 from .config import get_settings
 from .db import get_conn, transaction
-from .utils import now_iso, short_hash
+from .utils import now_iso, short_hash, text_sha256
 
 
 @dataclass
@@ -76,7 +77,9 @@ def insert_recording(
     size_bytes: int,
     duration_secs: float | None,
     recorded_at: datetime | None,
-) -> int:
+) -> Recording:
+    ingested_at = now_iso()
+    recorded_at_iso = recorded_at.isoformat() if recorded_at else None
     with transaction() as conn:
         cur = conn.execute(
             "INSERT INTO recordings(sha256, src_path, archive_path, size_bytes, duration_secs, recorded_at, ingested_at) "
@@ -87,11 +90,21 @@ def insert_recording(
                 str(archive_path),
                 size_bytes,
                 duration_secs,
-                recorded_at.isoformat() if recorded_at else None,
-                now_iso(),
+                recorded_at_iso,
+                ingested_at,
             ),
         )
-        return int(cur.lastrowid)
+        rid = int(cur.lastrowid)
+    return Recording(
+        id=rid,
+        sha256=sha256,
+        src_path=src_path,
+        archive_path=archive_path,
+        size_bytes=size_bytes,
+        duration_secs=duration_secs,
+        recorded_at=recorded_at_iso,
+        ingested_at=ingested_at,
+    )
 
 
 def insert_transcript(
@@ -184,3 +197,76 @@ def get_transcript_text(recording_id: int) -> str | None:
         "SELECT text FROM transcripts WHERE recording_id = ?", (recording_id,)
     ).fetchone()
     return row["text"] if row else None
+
+
+def recordings_with_transcripts(recording_ids: Iterable[int]) -> set[int]:
+    """Return the subset of given recording_ids that already have a transcript row."""
+    ids = list(recording_ids)
+    if not ids:
+        return set()
+    placeholders = ",".join("?" * len(ids))
+    rows = get_conn().execute(
+        f"SELECT recording_id FROM transcripts WHERE recording_id IN ({placeholders})",
+        ids,
+    ).fetchall()
+    return {int(r["recording_id"]) for r in rows}
+
+
+def list_enrichments(recording_id: int) -> list[dict]:
+    """Past enrichments for a recording, newest first."""
+    rows = get_conn().execute(
+        "SELECT id, backend, task, model, input_tokens, output_tokens, cost_usd, created_at, output_text "
+        "FROM enrichments WHERE recording_id = ? ORDER BY created_at DESC",
+        (recording_id,),
+    ).fetchall()
+    return [
+        {
+            "id": int(r["id"]),
+            "backend": r["backend"],
+            "task": r["task"],
+            "model": r["model"],
+            "input_tokens": r["input_tokens"],
+            "output_tokens": r["output_tokens"],
+            "cost_usd": r["cost_usd"],
+            "created_at": r["created_at"],
+            "output_text": r["output_text"],
+        }
+        for r in rows
+    ]
+
+
+def find_recording_for_folder(folder: Path) -> Recording | None:
+    """Find the recording whose archive_path lives in this folder, regardless of audio extension."""
+    row = get_conn().execute(
+        "SELECT * FROM recordings WHERE archive_path LIKE ? LIMIT 1",
+        (str(folder / "audio.%"),),
+    ).fetchone()
+    return Recording.from_row(row) if row else None
+
+
+def append_enrichment_to_md(md_path: Path, result_text: str, backend: str, task: str) -> None:
+    """Append a labeled enrichment block to a transcript .md."""
+    block = (
+        f"\n\n## Enrichment ({backend}, {task}, {now_iso()})\n\n"
+        f"{result_text.strip()}\n"
+    )
+    with md_path.open("a", encoding="utf-8") as f:
+        f.write(block)
+
+
+def record_enrichment_for_folder(folder: Path, transcript: str, result) -> None:
+    """Insert an enrichments row keyed to the recording in `folder`. No-op if not found."""
+    rec = find_recording_for_folder(folder)
+    if rec is None:
+        return
+    insert_enrichment(
+        recording_id=rec.id,
+        backend=result.backend,
+        task=result.task,
+        model=result.model,
+        input_tokens=result.input_tokens,
+        output_tokens=result.output_tokens,
+        cost_usd=result.cost_usd,
+        transcript_sha=text_sha256(transcript),
+        output_text=result.text,
+    )

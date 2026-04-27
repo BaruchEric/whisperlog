@@ -25,14 +25,11 @@ def _get_model():
         return _model
     from faster_whisper import WhisperModel  # heavy import; defer until needed
 
-    device = s.whisper_device
-    if device == "auto":
-        device = "auto"  # faster-whisper accepts "auto" directly
     logger.info("Loading Whisper model %s (device=%s, compute=%s)",
-                s.whisper_model, device, s.whisper_compute_type)
+                s.whisper_model, s.whisper_device, s.whisper_compute_type)
     _model = WhisperModel(
         s.whisper_model,
-        device=device,
+        device=s.whisper_device,
         compute_type=s.whisper_compute_type,
     )
     _model_key = key
@@ -125,11 +122,12 @@ def transcribe_path(audio_path: Path) -> TranscriptionResult:
 
 def iter_pending(recordings: Iterable[Recording]) -> Iterable[Recording]:
     """Filter recordings that have no transcript yet."""
-    from .db import get_conn
-    conn = get_conn()
-    for rec in recordings:
-        row = conn.execute(
-            "SELECT 1 FROM transcripts WHERE recording_id = ?", (rec.id,)
-        ).fetchone()
-        if not row:
+    from .archive import recordings_with_transcripts
+
+    recs = list(recordings)
+    if not recs:
+        return
+    transcribed = recordings_with_transcripts(r.id for r in recs)
+    for rec in recs:
+        if rec.id not in transcribed:
             yield rec

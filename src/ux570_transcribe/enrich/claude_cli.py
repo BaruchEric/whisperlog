@@ -11,7 +11,6 @@ with zero cost since billing happens against the user's Claude subscription.
 from __future__ import annotations
 
 import logging
-import os
 import shutil
 import subprocess
 import tempfile
@@ -94,7 +93,6 @@ class ClaudeCLIEnricher(Enricher):
                     capture_output=True,
                     text=True,
                     timeout=timeout_secs,
-                    env={**os.environ},
                 )
             except subprocess.TimeoutExpired as e:
                 raise RuntimeError(f"Claude CLI timed out after {timeout_secs}s") from e

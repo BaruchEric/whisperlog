@@ -13,10 +13,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Literal
 
-from .archive import find_by_archive_path, insert_enrichment
+from .archive import record_enrichment_for_folder
 from .config import get_settings
 from .enrich import Enricher, EnrichResult, load_prompt_template, render_prompt
-from .utils import text_sha256
 
 logger = logging.getLogger("ux570.agent")
 
@@ -38,7 +37,6 @@ def _resolve_transcript(transcript: Path) -> tuple[str, Path]:
     """
     p = transcript.expanduser().resolve()
     if p.is_dir():
-        # Archive folder
         for name in ("transcript.txt", "transcript.md"):
             f = p / name
             if f.is_file():
@@ -59,31 +57,6 @@ def _enricher_for(backend: AgentBackend, model_override: str | None) -> Enricher
     raise ValueError(f"Agents support claude-api or claude-cli only, got {backend}")
 
 
-def _record_enrichment(folder: Path, transcript: str, result: EnrichResult) -> None:
-    rec = find_by_archive_path(folder / "audio.mp3") or find_by_archive_path(folder / "audio.wav")
-    if rec is None:
-        # Look up by directory match — best effort.
-        from .archive import list_recordings
-        for r in list_recordings(limit=200):
-            if r.archive_path.parent == folder:
-                rec = r
-                break
-    if rec is None:
-        logger.debug("No recording row matched %s; skipping DB write.", folder)
-        return
-    insert_enrichment(
-        recording_id=rec.id,
-        backend=result.backend,
-        task=result.task,
-        model=result.model,
-        input_tokens=result.input_tokens,
-        output_tokens=result.output_tokens,
-        cost_usd=result.cost_usd,
-        transcript_sha=text_sha256(transcript),
-        output_text=result.text,
-    )
-
-
 def _run_step(
     enricher: Enricher,
     template_name: str,
@@ -98,6 +71,14 @@ def _run_step(
 
 # ---------- meeting-debrief ----------
 
+_DEBRIEF_STEPS = [
+    ("meeting_notes", "meeting-notes", "meeting-notes", "meeting_notes.md", None),
+    ("action_items", "action-items", "action-items", "action_items.md", None),
+    ("followup_email", "followup-email", "followup-email", "followup_email.eml", lambda t: _wrap_eml(t)),
+    ("calendar_ics", "calendar-ics", "calendar", "mentioned_events.ics", lambda t: _wrap_ics(t)),
+]
+
+
 def meeting_debrief(
     transcript: Path,
     *,
@@ -110,37 +91,14 @@ def meeting_debrief(
     outputs: list[AgentOutput] = []
     total_cost = 0.0
 
-    # 1. Structured meeting notes.
-    notes_res = _run_step(enricher, "meeting_notes", text, task_label="meeting-notes")
-    notes_path = folder / "meeting_notes.md"
-    notes_path.write_text(notes_res.text + "\n", encoding="utf-8")
-    outputs.append(AgentOutput("meeting-notes", notes_path, notes_res.text[:200], notes_res.cost_usd))
-    total_cost += notes_res.cost_usd
-    _record_enrichment(folder, text, notes_res)
-
-    # 2. Action items.
-    ai_res = _run_step(enricher, "action_items", text, task_label="action-items")
-    ai_path = folder / "action_items.md"
-    ai_path.write_text(ai_res.text + "\n", encoding="utf-8")
-    outputs.append(AgentOutput("action-items", ai_path, ai_res.text[:200], ai_res.cost_usd))
-    total_cost += ai_res.cost_usd
-    _record_enrichment(folder, text, ai_res)
-
-    # 3. Follow-up email draft.
-    email_res = _run_step(enricher, "followup_email", text, task_label="followup-email")
-    eml_path = folder / "followup_email.eml"
-    eml_path.write_text(_wrap_eml(email_res.text), encoding="utf-8")
-    outputs.append(AgentOutput("followup-email", eml_path, email_res.text[:200], email_res.cost_usd))
-    total_cost += email_res.cost_usd
-    _record_enrichment(folder, text, email_res)
-
-    # 4. ICS for any meetings mentioned.
-    ics_res = _run_step(enricher, "calendar_ics", text, task_label="calendar-ics")
-    ics_path = folder / "mentioned_events.ics"
-    ics_path.write_text(_wrap_ics(ics_res.text), encoding="utf-8")
-    outputs.append(AgentOutput("calendar", ics_path, ics_res.text[:200], ics_res.cost_usd))
-    total_cost += ics_res.cost_usd
-    _record_enrichment(folder, text, ics_res)
+    for template, task_label, output_name, filename, wrap in _DEBRIEF_STEPS:
+        res = _run_step(enricher, template, text, task_label=task_label)
+        body = wrap(res.text) if wrap else res.text + "\n"
+        path = folder / filename
+        path.write_text(body, encoding="utf-8")
+        outputs.append(AgentOutput(output_name, path, res.text[:200], res.cost_usd))
+        total_cost += res.cost_usd
+        record_enrichment_for_folder(folder, text, res)
 
     logger.info("meeting-debrief complete. Total cost: $%.4f", total_cost)
     return outputs
@@ -200,12 +158,11 @@ def code_review(
 
     enricher = _enricher_for(backend, model)
 
-    # 1. Decisions + open questions extraction.
     res = _run_step(enricher, "coding_session", text, task_label="code-review")
     summary_path = folder / "code_review.md"
     summary_path.write_text(res.text + "\n", encoding="utf-8")
     outputs.append(AgentOutput("code-review", summary_path, res.text[:200], res.cost_usd))
-    _record_enrichment(folder, text, res)
+    record_enrichment_for_folder(folder, text, res)
 
     if repo is not None:
         from .enrich.claude_cli import ClaudeCLIEnricher
@@ -262,6 +219,6 @@ def custom_workflow(
         out_path = folder / out_filename
         out_path.write_text(res.text + "\n", encoding="utf-8")
         outputs.append(AgentOutput(name, out_path, res.text[:200], res.cost_usd))
-        _record_enrichment(folder, text, res)
+        record_enrichment_for_folder(folder, text, res)
 
     return outputs

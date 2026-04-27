@@ -14,7 +14,6 @@ from ..ledger import (
     SpendCapExceeded,
     assert_within_cap,
     estimate_cost_usd,
-    estimate_input_cost_usd,
     record_spend,
 )
 from ..secrets import require_anthropic_key
@@ -29,6 +28,16 @@ from .base import (
 logger = logging.getLogger("ux570.enrich.claude_api")
 
 
+def _import_anthropic():
+    try:
+        import anthropic
+    except ImportError as e:
+        raise RuntimeError(
+            "anthropic SDK is not installed. Install: `uv pip install -e '.[cloud]'`"
+        ) from e
+    return anthropic
+
+
 class ConfirmationDeclined(RuntimeError):
     pass
 
@@ -40,13 +49,7 @@ class ClaudeAPIEnricher(Enricher):
         self.model = model
 
     def _client(self):
-        try:
-            import anthropic
-        except ImportError as e:
-            raise RuntimeError(
-                "anthropic SDK is not installed. Install: `uv pip install -e '.[cloud]'`"
-            ) from e
-        return anthropic.Anthropic(api_key=require_anthropic_key())
+        return _import_anthropic().Anthropic(api_key=require_anthropic_key())
 
     def enrich(
         self,
@@ -66,9 +69,15 @@ class ClaudeAPIEnricher(Enricher):
         chosen_model = model or self.model or s.claude_model
         max_out = max_tokens or s.claude_max_tokens
 
+        anthropic = _import_anthropic()
         client = self._client()
+        transient_errors = (
+            anthropic.RateLimitError,
+            anthropic.APIConnectionError,
+            anthropic.APITimeoutError,
+            anthropic.InternalServerError,
+        )
 
-        # 1. Estimate input tokens via the SDK's count_tokens (avoids an unmeasured call).
         try:
             count = client.messages.count_tokens(
                 model=chosen_model,
@@ -79,27 +88,18 @@ class ClaudeAPIEnricher(Enricher):
             logger.warning("count_tokens failed (%s); estimating from char length", e)
             est_in = max(1, len(prompt) // 4)
 
-        est_cost = estimate_input_cost_usd(chosen_model, est_in, max_out)
+        est_cost = estimate_cost_usd(chosen_model, est_in, max_out)
         logger.info(
             "Claude API: model=%s task=%s est_input=%d max_output=%d est_cost=$%.4f",
             chosen_model, task, est_in, max_out, est_cost,
         )
 
-        # 2. Spend cap check.
         if not skip_cap_check:
             assert_within_cap(est_cost)
 
-        # 3. Cost confirmation prompt for non-trivial calls.
         if confirm and est_cost > s.cost_confirm_usd:
             self._require_confirmation(est_in, est_cost, chosen_model, task)
 
-        # 4. Send with retry on transient errors.
-        try:
-            import anthropic
-        except ImportError:
-            anthropic = None  # type: ignore
-
-        last_err: Exception | None = None
         for attempt in range(retries):
             try:
                 response = client.messages.create(
@@ -108,29 +108,13 @@ class ClaudeAPIEnricher(Enricher):
                     messages=[{"role": "user", "content": prompt}],
                 )
                 break
-            except Exception as e:
-                transient = False
-                if anthropic is not None:
-                    transient = isinstance(
-                        e,
-                        (
-                            getattr(anthropic, "RateLimitError", Exception),
-                            getattr(anthropic, "APIConnectionError", Exception),
-                            getattr(anthropic, "APITimeoutError", Exception),
-                            getattr(anthropic, "InternalServerError", Exception),
-                        ),
-                    )
-                if not transient or attempt == retries - 1:
-                    last_err = e
+            except transient_errors as e:
+                if attempt == retries - 1:
                     raise
                 wait = (2 ** attempt) + 0.5
                 logger.warning("Transient Claude error (%s); retry %d in %.1fs", e, attempt + 1, wait)
                 time.sleep(wait)
-        else:
-            assert last_err is not None
-            raise last_err
 
-        # 5. Extract text and usage.
         text = "".join(
             block.text for block in response.content if getattr(block, "type", None) == "text"
         ).strip()

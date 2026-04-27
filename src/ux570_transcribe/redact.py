@@ -62,11 +62,11 @@ Output ONLY the redacted text. No commentary.
 
 
 def redact_with_ollama(text: str) -> str:
+    from .enrich.base import render_prompt
     from .enrich.ollama import OllamaEnricher
 
-    enricher = OllamaEnricher()
-    prompt = _OLLAMA_REDACT_PROMPT.replace("{{transcript}}", text)
-    res = enricher.enrich(text, prompt, task="redact")
+    prompt = render_prompt(_OLLAMA_REDACT_PROMPT, text)
+    res = OllamaEnricher().enrich(text, prompt, task="redact")
     return res.text
 
 

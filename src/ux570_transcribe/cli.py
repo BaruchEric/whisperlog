@@ -12,7 +12,7 @@ from rich.table import Table
 
 from . import __version__
 from .config import get_settings
-from .utils import now_iso, setup_logging
+from .utils import setup_logging
 
 app = typer.Typer(
     name="ux570",
@@ -145,7 +145,7 @@ def enrich(
     yes: bool = typer.Option(False, "--yes", help="Skip cost confirmation"),
 ) -> None:
     """Run an enrichment pass on a transcript and append to its .md."""
-    from .archive import find_by_archive_path
+    from .archive import append_enrichment_to_md, record_enrichment_for_folder
     from .enrich import get_enricher, load_prompt_template, render_prompt
 
     s = get_settings()
@@ -165,32 +165,12 @@ def enrich(
 
     result = enricher.enrich(text, prompt, **kwargs)
 
-    block = (
-        f"\n\n## Enrichment ({result.backend}, {task_choice}, {now_iso()})\n\n"
-        f"{result.text.strip()}\n"
-    )
-    with md_path.open("a", encoding="utf-8") as f:
-        f.write(block)
+    append_enrichment_to_md(md_path, result.text, result.backend, task_choice)
     console.print(
         f"[green]✓[/green] {result.backend} {task_choice} → {md_path}  "
         f"(in={result.input_tokens} out={result.output_tokens} cost=${result.cost_usd:.4f})"
     )
-
-    rec = find_by_archive_path(md_path.parent / "audio.mp3") or find_by_archive_path(md_path.parent / "audio.wav")
-    if rec is not None:
-        from .archive import insert_enrichment
-        from .utils import text_sha256
-        insert_enrichment(
-            recording_id=rec.id,
-            backend=result.backend,
-            task=task_choice,
-            model=result.model,
-            input_tokens=result.input_tokens,
-            output_tokens=result.output_tokens,
-            cost_usd=result.cost_usd,
-            transcript_sha=text_sha256(text),
-            output_text=result.text,
-        )
+    record_enrichment_for_folder(md_path.parent, text, result)
 
 
 def _resolve_text_and_md(p: Path) -> tuple[str, Path]:

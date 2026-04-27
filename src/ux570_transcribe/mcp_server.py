@@ -19,10 +19,10 @@ from typing import Any
 from .archive import (
     SearchHit,
     get_transcript_text,
+    list_enrichments,
     list_recordings,
     search,
 )
-from .db import get_conn
 from .utils import setup_logging
 
 logger = logging.getLogger("ux570.mcp")
@@ -39,38 +39,16 @@ def _hit_to_dict(h: SearchHit) -> dict[str, Any]:
 
 
 def _recent_to_dicts(limit: int) -> list[dict[str, Any]]:
-    out = []
-    for r in list_recordings(limit=limit):
-        out.append({
+    return [
+        {
             "recording_id": r.id,
             "archive_path": str(r.archive_path),
             "recorded_at": r.recorded_at,
             "ingested_at": r.ingested_at,
             "size_bytes": r.size_bytes,
             "duration_secs": r.duration_secs,
-        })
-    return out
-
-
-def _enrichments_for(recording_id: int) -> list[dict[str, Any]]:
-    rows = get_conn().execute(
-        "SELECT id, backend, task, model, input_tokens, output_tokens, cost_usd, created_at, output_text "
-        "FROM enrichments WHERE recording_id = ? ORDER BY created_at DESC",
-        (recording_id,),
-    ).fetchall()
-    return [
-        {
-            "id": int(r["id"]),
-            "backend": r["backend"],
-            "task": r["task"],
-            "model": r["model"],
-            "input_tokens": r["input_tokens"],
-            "output_tokens": r["output_tokens"],
-            "cost_usd": r["cost_usd"],
-            "created_at": r["created_at"],
-            "output_text": r["output_text"],
         }
-        for r in rows
+        for r in list_recordings(limit=limit)
     ]
 
 
@@ -140,7 +118,7 @@ async def _serve() -> None:
         elif name == "list_recent":
             payload = _recent_to_dicts(limit=int(arguments.get("limit", 20)))
         elif name == "list_enrichments":
-            payload = _enrichments_for(int(arguments["recording_id"]))
+            payload = list_enrichments(int(arguments["recording_id"]))
         else:
             raise ValueError(f"Unknown tool: {name}")
         return [types.TextContent(type="text", text=json.dumps(payload, indent=2))]

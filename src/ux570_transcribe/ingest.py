@@ -28,7 +28,7 @@ logger = logging.getLogger("ux570.ingest")
 
 DEVICE_NAME_HINT = "IC RECORDER"
 RECORDING_DIRNAME = "REC_FILE"
-AUDIO_SUFFIXES = {".mp3", ".MP3", ".wav", ".WAV"}
+AUDIO_SUFFIXES = {".mp3", ".wav"}
 
 
 def detect_mount_point() -> Path | None:
@@ -62,7 +62,7 @@ def list_device_recordings(mount: Path) -> list[Path]:
         if not folder.is_dir():
             continue
         for f in sorted(folder.iterdir()):
-            if f.is_file() and f.suffix in AUDIO_SUFFIXES:
+            if f.is_file() and f.suffix.lower() in AUDIO_SUFFIXES:
                 files.append(f)
     return files
 
@@ -84,7 +84,7 @@ def ingest_file(src: Path) -> tuple[Recording, bool]:
     folder = archive_dir_for(recorded_at, sha, src.suffix.lower())
     dest = folder / f"audio{src.suffix.lower()}"
     safe_copy(src, dest)
-    rid = insert_recording(
+    rec = insert_recording(
         sha256=sha,
         src_path=src,
         archive_path=dest,
@@ -92,8 +92,6 @@ def ingest_file(src: Path) -> tuple[Recording, bool]:
         duration_secs=None,
         recorded_at=recorded_at,
     )
-    rec = find_by_sha(sha)
-    assert rec is not None and rec.id == rid
     logger.info("Ingested: %s -> %s", src.name, dest)
     return rec, True
 

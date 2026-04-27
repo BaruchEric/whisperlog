@@ -135,4 +135,6 @@ def get_enricher(backend: Backend) -> Enricher:
     if backend == "claude-cli":
         from .claude_cli import ClaudeCLIEnricher
         return ClaudeCLIEnricher()
-    raise ValueError(f"Unknown enrichment backend: {backend}")
+    raise ValueError(
+        f"Unknown enrichment backend: {backend!r}. Expected one of: ollama, claude-api, claude-cli."
+    )
