@@ -1,5 +1,8 @@
 # ux570-transcribe
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](pyproject.toml)
+
 Local-first transcription pipeline for the **Sony ICD-UX570** voice recorder, with optional Claude enrichment and an MCP server so Claude Desktop / Claude Code can search your archive directly.
 
 ## What this is
@@ -34,7 +37,7 @@ Optional, depending on which features you want:
 ## Quick start (local mode)
 
 ```bash
-git clone <this-repo>
+git clone https://github.com/BaruchEric/ux570-transcribe.git
 cd ux570-transcribe
 uv pip install -e .
 
@@ -230,3 +233,7 @@ pytest
 ```
 
 Tests use a tmp-dir-isolated SQLite DB and never touch your real archive or keychain.
+
+## License
+
+[MIT](LICENSE) © Eric Baruch
