@@ -9,14 +9,14 @@ import pytest
 
 @pytest.fixture(autouse=True)
 def isolate_dirs(tmp_path: Path, monkeypatch):
-    """Point UX570_ARCHIVE_DIR and UX570_STATE_DIR at tmp dirs and reset settings."""
-    monkeypatch.setenv("UX570_ARCHIVE_DIR", str(tmp_path / "archive"))
-    monkeypatch.setenv("UX570_STATE_DIR", str(tmp_path / "state"))
+    """Point WHISPERLOG_ARCHIVE_DIR and WHISPERLOG_STATE_DIR at tmp dirs and reset settings."""
+    monkeypatch.setenv("WHISPERLOG_ARCHIVE_DIR", str(tmp_path / "archive"))
+    monkeypatch.setenv("WHISPERLOG_STATE_DIR", str(tmp_path / "state"))
     monkeypatch.setenv("MAX_DAILY_CLAUDE_USD", "1.00")
     monkeypatch.setenv("COST_CONFIRM_USD", "0.10")
 
-    from ux570_transcribe import config as cfg
-    from ux570_transcribe import db
+    from whisperlog import config as cfg
+    from whisperlog import db
 
     cfg.reset_settings_for_tests()
     db.close()

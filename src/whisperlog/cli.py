@@ -1,4 +1,4 @@
-"""Typer CLI for ux570-transcribe."""
+"""Typer CLI for whisperlog."""
 
 from __future__ import annotations
 
@@ -15,8 +15,8 @@ from .config import get_settings
 from .utils import setup_logging
 
 app = typer.Typer(
-    name="ux570",
-    help="Local-first transcription pipeline for Sony ICD-UX570.",
+    name="whisperlog",
+    help="Local-first audio transcription pipeline. Auto-detects Sony ICD-UX570; works with any source.",
     no_args_is_help=True,
 )
 config_app = typer.Typer(help="Manage config and secrets.")
@@ -25,7 +25,7 @@ app.add_typer(config_app, name="config")
 app.add_typer(agent_app, name="agent")
 
 console = Console()
-logger = logging.getLogger("ux570.cli")
+logger = logging.getLogger("whisperlog.cli")
 
 
 @app.callback()
@@ -279,7 +279,7 @@ def config_show() -> None:
     table.add_column("Key")
     table.add_column("Value")
     for k in (
-        "ux570_archive_dir", "ux570_state_dir", "whisper_model", "whisper_device",
+        "whisperlog_archive_dir", "whisperlog_state_dir", "whisper_model", "whisper_device",
         "whisper_compute_type", "enable_vad", "default_enrich_backend",
         "default_enrich_task", "ollama_host", "ollama_model",
         "claude_model", "claude_agent_model", "max_daily_claude_usd",

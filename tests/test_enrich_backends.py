@@ -6,8 +6,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from ux570_transcribe.enrich import get_enricher, render_prompt
-from ux570_transcribe.enrich.base import PROMPT_PLACEHOLDER
+from whisperlog.enrich import get_enricher, render_prompt
+from whisperlog.enrich.base import PROMPT_PLACEHOLDER
 
 
 def test_get_enricher_unknown():
@@ -55,7 +55,7 @@ def test_ollama_backend(monkeypatch):
 def test_claude_api_backend_routes_through_sdk(monkeypatch):
     """Verify the API enricher sends through anthropic SDK and records spend."""
     monkeypatch.setattr(
-        "ux570_transcribe.secrets.require_anthropic_key",
+        "whisperlog.secrets.require_anthropic_key",
         lambda: "sk-ant-test",
     )
 

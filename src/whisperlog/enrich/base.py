@@ -15,7 +15,7 @@ from typing import Literal
 from ..config import get_settings
 from ..utils import append_jsonl, now_iso, text_sha256
 
-logger = logging.getLogger("ux570.enrich")
+logger = logging.getLogger("whisperlog.enrich")
 
 Backend = Literal["ollama", "claude-api", "claude-cli"]
 
@@ -37,7 +37,7 @@ class EnrichResult:
 def _prompts_dir() -> Path:
     """Resolve the prompts/ directory next to the installed package or repo root."""
     pkg_root = Path(__file__).resolve().parent.parent
-    # Repo layout: src/ux570_transcribe/enrich/base.py -> repo/prompts
+    # Repo layout: src/whisperlog/enrich/base.py -> repo/prompts
     repo_root = pkg_root.parent.parent
     candidates = [pkg_root / "prompts", repo_root / "prompts"]
     for c in candidates:

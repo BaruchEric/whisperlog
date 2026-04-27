@@ -6,7 +6,7 @@ Tools:
 - list_recent(limit) → timeline of recent recordings
 - list_enrichments(recording_id) → past summaries / agent outputs
 
-Run: `ux570-mcp` (stdio) — install the [mcp] extra first.
+Run: `whisperlog-mcp` (stdio) — install the [mcp] extra first.
 """
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ from .archive import (
 )
 from .utils import setup_logging
 
-logger = logging.getLogger("ux570.mcp")
+logger = logging.getLogger("whisperlog.mcp")
 
 
 def _hit_to_dict(h: SearchHit) -> dict[str, Any]:
@@ -62,7 +62,7 @@ async def _serve() -> None:
             "MCP SDK not installed. Install: `uv pip install -e '.[mcp]'`"
         ) from e
 
-    server = Server("ux570-transcribe")
+    server = Server("whisperlog")
 
     @server.list_tools()
     async def list_tools() -> list[types.Tool]:

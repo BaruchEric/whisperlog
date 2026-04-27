@@ -9,7 +9,7 @@ import httpx
 from ..config import get_settings
 from .base import Backend, Enricher, EnrichResult, log_enrich_call
 
-logger = logging.getLogger("ux570.enrich.ollama")
+logger = logging.getLogger("whisperlog.enrich.ollama")
 
 
 class OllamaEnricher(Enricher):

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ux570_transcribe.ingest import ingest_file, ingest_from_path, list_audio_files
+from whisperlog.ingest import ingest_file, ingest_from_path, list_audio_files
 
 
 def _fake_audio(p: Path) -> Path:

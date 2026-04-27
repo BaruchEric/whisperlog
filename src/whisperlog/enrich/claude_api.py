@@ -25,7 +25,7 @@ from .base import (
     log_enrich_call,
 )
 
-logger = logging.getLogger("ux570.enrich.claude_api")
+logger = logging.getLogger("whisperlog.enrich.claude_api")
 
 
 def _import_anthropic():

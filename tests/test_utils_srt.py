@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from ux570_transcribe.utils import (
+from whisperlog.utils import (
     append_jsonl,
     file_sha256,
     srt_timestamp,

@@ -28,7 +28,7 @@ from .archive import (
 )
 from .utils import file_sha256, safe_copy
 
-logger = logging.getLogger("ux570.ingest")
+logger = logging.getLogger("whisperlog.ingest")
 
 DEVICE_NAME_HINT = "IC RECORDER"
 RECORDING_DIRNAME = "REC_FILE"

@@ -17,7 +17,7 @@ from .archive import record_enrichment_for_folder
 from .config import get_settings
 from .enrich import Enricher, EnrichResult, load_prompt_template, render_prompt
 
-logger = logging.getLogger("ux570.agent")
+logger = logging.getLogger("whisperlog.agent")
 
 AgentBackend = Literal["claude-api", "claude-cli"]
 
@@ -129,9 +129,9 @@ def _wrap_ics(body: str) -> str:
     return (
         "BEGIN:VCALENDAR\n"
         "VERSION:2.0\n"
-        "PRODID:-//ux570-transcribe//agent//EN\n"
+        "PRODID:-//whisperlog//agent//EN\n"
         "BEGIN:VEVENT\n"
-        f"UID:{today}@ux570\n"
+        f"UID:{today}@whisperlog\n"
         f"DTSTAMP:{today}\n"
         "SUMMARY:Mentioned events (review)\n"
         f"DESCRIPTION:{description}\n"

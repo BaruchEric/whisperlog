@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import getpass
 
-SERVICE = "ux570-transcribe"
+SERVICE = "whisperlog"
 
 
 def _keyring():
@@ -49,6 +49,6 @@ def require_anthropic_key() -> str:
     if not key:
         raise RuntimeError(
             "No Anthropic API key in OS keychain. "
-            "Run `ux570 config set-key anthropic` first."
+            "Run `whisperlog config set-key anthropic` first."
         )
     return key

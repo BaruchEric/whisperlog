@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
 # demo-cloud.sh — opt-in Claude API enrichment on a synthetic transcript.
-# Costs real money. See `ux570 stats` afterwards.
+# Costs real money. See `whisperlog stats` afterwards.
 #
-# Prereqs:  uv pip install -e '.[cloud]'  +  ux570 config set-key anthropic
+# Prereqs:  uv pip install -e '.[cloud]'  +  whisperlog config set-key anthropic
 set -euo pipefail
 
-if ! ux570 config show >/dev/null 2>&1; then
-  echo "ux570 not on PATH. Did you run: uv pip install -e '.[cloud]'?"
+if ! whisperlog config show >/dev/null 2>&1; then
+  echo "whisperlog not on PATH. Did you run: uv pip install -e '.[cloud]'?"
   exit 1
 fi
 
-WORKDIR="$(mktemp -d -t ux570-cloud-demo-XXXXXX)"
+WORKDIR="$(mktemp -d -t whisperlog-cloud-demo-XXXXXX)"
 TRANSCRIPT="$WORKDIR/transcript.txt"
 
 cat > "$TRANSCRIPT" <<'EOF'
@@ -24,11 +24,11 @@ EOF
 echo "Synthetic transcript at: $TRANSCRIPT"
 echo
 echo "Running Claude API summarizer (default: claude-sonnet-4-6)..."
-ux570 enrich "$TRANSCRIPT" --backend claude-api --task meeting_notes --yes
+whisperlog enrich "$TRANSCRIPT" --backend claude-api --task meeting_notes --yes
 
 echo
 echo "Spend so far:"
-ux570 stats
+whisperlog stats
 
 echo
-echo "Audit log location: ~/.ux570/audit.log (no transcript content stored)"
+echo "Audit log location: ~/.whisperlog/audit.log (no transcript content stored)"

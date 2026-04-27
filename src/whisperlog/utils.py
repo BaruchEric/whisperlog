@@ -10,7 +10,7 @@ import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
-logger = logging.getLogger("ux570")
+logger = logging.getLogger("whisperlog")
 
 
 def setup_logging(verbose: bool = False) -> None:

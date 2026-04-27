@@ -1,4 +1,4 @@
-"""Watch daemon: poll for the UX570, ingest, transcribe, optionally enrich."""
+"""Watch daemon: poll for a UX570 mount or a static --source folder; ingest, transcribe, optionally enrich."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from .enrich import get_enricher, load_prompt_template, render_prompt
 from .ingest import detect_mount_point, eject, ingest_from_path, list_audio_files
 from .transcribe import iter_pending, transcribe_recording
 
-logger = logging.getLogger("ux570.watch")
+logger = logging.getLogger("whisperlog.watch")
 
 
 def _source_signature(source: Path) -> tuple:

@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ux570_transcribe import transcribe as tx
-from ux570_transcribe.ingest import ingest_file
-from ux570_transcribe.transcribe import (
+from whisperlog import transcribe as tx
+from whisperlog.ingest import ingest_file
+from whisperlog.transcribe import (
     Segment,
     TranscriptionResult,
     transcribe_recording,
@@ -52,5 +52,5 @@ def test_transcribe_recording_persists(tmp_path: Path, monkeypatch):
     txt, srt, md, result = transcribe_recording(rec)
 
     assert txt.exists() and srt.exists() and md.exists()
-    from ux570_transcribe.archive import get_transcript_text
+    from whisperlog.archive import get_transcript_text
     assert "Hello world." in (get_transcript_text(rec.id) or "")

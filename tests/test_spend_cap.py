@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from ux570_transcribe.ledger import (
+from whisperlog.ledger import (
     SpendCapExceeded,
     assert_within_cap,
     daily_total_usd,

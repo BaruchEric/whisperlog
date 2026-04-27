@@ -1,6 +1,6 @@
 """SQLite-backed archive index, FTS5 search, and spend ledger.
 
-Single-user CLI: one DB file at ~/.ux570/index.db. WAL mode, foreign keys on.
+Single-user CLI: one DB file at ~/.whisperlog/index.db. WAL mode, foreign keys on.
 All writes go through this module so concurrent CLI invocations stay consistent.
 """
 

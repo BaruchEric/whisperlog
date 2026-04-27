@@ -22,8 +22,8 @@ class Settings(BaseSettings):
     )
 
     # Core paths
-    ux570_archive_dir: Path = Field(default=Path("~/Documents/ux570-archive"))
-    ux570_state_dir: Path = Field(default=Path("~/.ux570"))
+    whisperlog_archive_dir: Path = Field(default=Path("~/Documents/whisperlog-archive"))
+    whisperlog_state_dir: Path = Field(default=Path("~/.whisperlog"))
 
     # Whisper
     whisper_model: str = "small.en"
@@ -55,18 +55,18 @@ class Settings(BaseSettings):
     # Claude CLI
     claude_cli_path: str = "claude"
 
-    @field_validator("ux570_archive_dir", "ux570_state_dir", mode="before")
+    @field_validator("whisperlog_archive_dir", "whisperlog_state_dir", mode="before")
     @classmethod
     def _expand_paths(cls, v: str | Path) -> Path:
         return _expand(v)
 
     def state_dir(self) -> Path:
-        self.ux570_state_dir.mkdir(parents=True, exist_ok=True)
-        return self.ux570_state_dir
+        self.whisperlog_state_dir.mkdir(parents=True, exist_ok=True)
+        return self.whisperlog_state_dir
 
     def archive_dir(self) -> Path:
-        self.ux570_archive_dir.mkdir(parents=True, exist_ok=True)
-        return self.ux570_archive_dir
+        self.whisperlog_archive_dir.mkdir(parents=True, exist_ok=True)
+        return self.whisperlog_archive_dir
 
     def db_path(self) -> Path:
         return self.state_dir() / "index.db"

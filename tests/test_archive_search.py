@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from pathlib import Path
 
-from ux570_transcribe.archive import insert_recording, insert_transcript, search
+from whisperlog.archive import insert_recording, insert_transcript, search
 
 
 def _make_rec(tmp_path: Path, name: str, sha: str) -> int:

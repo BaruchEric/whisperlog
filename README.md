@@ -1,4 +1,4 @@
-# ux570-transcribe
+# whisperlog
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](pyproject.toml)
@@ -7,7 +7,7 @@ Local-first transcription pipeline for the **Sony ICD-UX570** voice recorder, wi
 
 ## What this is
 
-Plug in a UX570, run `ux570 watch`, and your recordings flow into a local archive: copied off the device, transcribed with Whisper, summarized with a local LLM, and indexed for full-text search. Claude features (summaries, action items, multi-step agent workflows, MCP) are **opt-in** and **per-call** — never silently triggered.
+Plug in a UX570, run `whisperlog watch`, and your recordings flow into a local archive: copied off the device, transcribed with Whisper, summarized with a local LLM, and indexed for full-text search. Claude features (summaries, action items, multi-step agent workflows, MCP) are **opt-in** and **per-call** — never silently triggered.
 
 The pipeline is generic — the UX570 is just the default. Pass `--source <dir>` to `ingest` or `watch` to point it at any USB drive, network share, or local folder. If the Sony `REC_FILE/FOLDER01..05` layout is detected the device convention is used; otherwise the directory is walked recursively for any common audio format (`.mp3 .wav .m4a .mp4 .flac .ogg .aac .opus .webm`).
 
@@ -22,7 +22,7 @@ There are two modes. The default never makes a network call.
 
 - **Audio never leaves your machine**, in either mode. Even agents see only the transcript text.
 - **API keys are stored in the OS keychain** (Keychain on macOS, Secret Service on Linux), never in `.env`, never logged.
-- **Audit log** at `~/.ux570/audit.log` records every cloud call: timestamp, backend, model, transcript SHA-256, first 80 characters, token counts, cost. The transcript content itself is not written.
+- **Audit log** at `~/.whisperlog/audit.log` records every cloud call: timestamp, backend, model, transcript SHA-256, first 80 characters, token counts, cost. The transcript content itself is not written.
 - **Fully offline mode is real.** With `DEFAULT_ENRICH_BACKEND=ollama` and `--backend ollama`, you can verify with `nettop`/`tcpdump` that no traffic leaves the machine. The Claude SDK isn't even imported.
 
 ## Prerequisites
@@ -39,33 +39,33 @@ Optional, depending on which features you want:
 ## Quick start (local mode)
 
 ```bash
-git clone https://github.com/BaruchEric/ux570-transcribe.git
-cd ux570-transcribe
+git clone https://github.com/BaruchEric/whisperlog.git
+cd whisperlog
 uv pip install -e .
 
 # Copy the env template and tweak as needed.
 cp .env.example .env
 
 # Plug in the UX570, then:
-ux570 ingest         # copy new recordings to the archive
-ux570 transcribe 'archive/**/audio.mp3'
+whisperlog ingest         # copy new recordings to the archive
+whisperlog transcribe 'archive/**/audio.mp3'
 
 # Or, in one shot:
-ux570 watch          # daemon: ingest+transcribe whenever the device is plugged in
-ux570 watch --enrich # also runs the default Ollama summarizer
+whisperlog watch          # daemon: ingest+transcribe whenever the device is plugged in
+whisperlog watch --enrich # also runs the default Ollama summarizer
 
 # Any other audio source — a folder, USB drive, network share, etc.:
-ux570 ingest --source ~/Dropbox/voice-memos
-ux570 watch  --source ~/Dropbox/voice-memos --once
+whisperlog ingest --source ~/Dropbox/voice-memos
+whisperlog watch  --source ~/Dropbox/voice-memos --once
 ```
 
 Search later:
 
 ```bash
-ux570 search "sarah AND project"
+whisperlog search "sarah AND project"
 ```
 
-The archive lives at `~/Documents/ux570-archive/<YYYY>/<YYYY-MM-DD>/<HH-MM>_<sha8>/` and contains:
+The archive lives at `~/Documents/whisperlog-archive/<YYYY>/<YYYY-MM-DD>/<HH-MM>_<sha8>/` and contains:
 
 - `audio.mp3` — the original file (read-only)
 - `transcript.txt` — plain text
@@ -78,13 +78,13 @@ Claude features are an extra, paid layer. Install the extras and store your key:
 
 ```bash
 uv pip install -e '.[cloud]'
-ux570 config set-key anthropic     # prompts; key goes to OS keychain
+whisperlog config set-key anthropic     # prompts; key goes to OS keychain
 ```
 
 Then pick a backend per call:
 
 ```bash
-ux570 enrich archive/2026/2026-04-27/14-30_abcd1234/ \
+whisperlog enrich archive/2026/2026-04-27/14-30_abcd1234/ \
   --backend claude-api \
   --task meeting_notes
 ```
@@ -105,10 +105,10 @@ Real example, a 30-minute meeting:
 
 The daily cap (`MAX_DAILY_CLAUDE_USD`, default `$5.00`) is enforced **before** any call is sent. Hitting the cap raises an error — there's no silent failover.
 
-`ux570 stats` shows your spend:
+`whisperlog stats` shows your spend:
 
 ```
-ux570 stats --days 30
+whisperlog stats --days 30
 ```
 
 ### Redact before sending
@@ -116,8 +116,8 @@ ux570 stats --days 30
 Regex catches email/phone/SSN/credit-card patterns. A local Ollama pass also strips names and addresses (better recall, still imperfect):
 
 ```bash
-ux570 redact archive/.../transcript.txt --ollama --out cleaned.txt
-ux570 enrich cleaned.txt --backend claude-api --task summarize
+whisperlog redact archive/.../transcript.txt --ollama --out cleaned.txt
+whisperlog enrich cleaned.txt --backend claude-api --task summarize
 ```
 
 The README is honest: regex alone is **not** real DLP. Run with `--ollama` for anything sensitive.
@@ -143,7 +143,7 @@ The README is honest: regex alone is **not** real DLP. Run with `--ollama` for a
 Drop a file in `prompts/<task>.md`. Use `{{transcript}}` as the placeholder for the transcript body. The CLI auto-discovers it:
 
 ```bash
-ux570 enrich /path/to/transcript.txt --task my-custom-task
+whisperlog enrich /path/to/transcript.txt --task my-custom-task
 ```
 
 ### Agent workflows
@@ -169,7 +169,7 @@ steps:
 Run it:
 
 ```bash
-ux570 agent custom archive/.../transcript.txt --workflow my_workflow.yaml
+whisperlog agent custom archive/.../transcript.txt --workflow my_workflow.yaml
 ```
 
 ## MCP server
@@ -185,7 +185,7 @@ Add this to your Claude Desktop / Claude Code MCP config:
 ```json
 {
   "mcpServers": {
-    "ux570": { "command": "ux570-mcp" }
+    "whisperlog": { "command": "whisperlog-mcp" }
   }
 }
 ```
@@ -211,7 +211,7 @@ Check `ollama serve` is running and `ollama list` shows the model in `OLLAMA_MOD
 Switch to `small.en` in `.env` or `tiny.en` for raw speed. Quality drops noticeably below `small`.
 
 **"No Anthropic API key in OS keychain."**
-Run `ux570 config set-key anthropic`. The key goes to Keychain (macOS) or Secret Service (Linux). To rotate, run the command again — it overwrites.
+Run `whisperlog config set-key anthropic`. The key goes to Keychain (macOS) or Secret Service (Linux). To rotate, run the command again — it overwrites.
 
 **Cost-cap error mid-day.**
 Raise `MAX_DAILY_CLAUDE_USD` in `.env`, or wait until tomorrow. The cap is per local calendar day.
@@ -219,16 +219,16 @@ Raise `MAX_DAILY_CLAUDE_USD` in `.env`, or wait until tomorrow. The cap is per l
 ## FAQ
 
 **Q: Does this send my recordings to Anthropic?**
-A: No. Audio never leaves your machine in any mode. In cloud mode, only the transcript text is sent. To verify: `cat ~/.ux570/audit.log` lists every cloud call (transcript hash + first 80 chars only); `lsof -i` while running confirms no `claude.ai`/`anthropic.com` connections in local mode.
+A: No. Audio never leaves your machine in any mode. In cloud mode, only the transcript text is sent. To verify: `cat ~/.whisperlog/audit.log` lists every cloud call (transcript hash + first 80 chars only); `lsof -i` while running confirms no `claude.ai`/`anthropic.com` connections in local mode.
 
 **Q: What does "local mode" actually mean?**
 A: With `--backend ollama` (or `DEFAULT_ENRICH_BACKEND=ollama` and no override), the only outbound traffic is to `127.0.0.1:11434` (your local Ollama). The `anthropic` SDK is lazily imported and never loaded in local mode.
 
 **Q: Where do I find the data?**
-A: Three locations: archive at `~/Documents/ux570-archive/`, state at `~/.ux570/` (DB, audit log, enrich log), and OS keychain entries under `ux570-transcribe`.
+A: Three locations: archive at `~/Documents/whisperlog-archive/`, state at `~/.whisperlog/` (DB, audit log, enrich log), and OS keychain entries under `whisperlog`.
 
 **Q: How do I uninstall cleanly?**
-A: `uv pip uninstall ux570-transcribe`, `rm -rf ~/.ux570 ~/Documents/ux570-archive`, then delete the `ux570-transcribe` keychain entries (Keychain Access → search "ux570").
+A: `uv pip uninstall whisperlog`, `rm -rf ~/.whisperlog ~/Documents/whisperlog-archive`, then delete the `whisperlog` keychain entries (Keychain Access → search "whisperlog").
 
 ## Development
 

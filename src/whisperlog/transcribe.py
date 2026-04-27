@@ -11,7 +11,7 @@ from .archive import Recording, insert_transcript
 from .config import get_settings
 from .utils import write_srt
 
-logger = logging.getLogger("ux570.transcribe")
+logger = logging.getLogger("whisperlog.transcribe")
 
 _model = None
 _model_key: tuple[str, str, str] | None = None

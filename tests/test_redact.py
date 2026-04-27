@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ux570_transcribe.redact import redact_regex
+from whisperlog.redact import redact_regex
 
 
 def test_redact_email_phone_ssn():

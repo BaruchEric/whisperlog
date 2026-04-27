@@ -25,7 +25,7 @@ from .base import (
     log_enrich_call,
 )
 
-logger = logging.getLogger("ux570.enrich.claude_cli")
+logger = logging.getLogger("whisperlog.enrich.claude_cli")
 
 INSTALL_HINT = (
     "Claude Code CLI not found on PATH. Install: https://claude.ai/code\n"
@@ -67,7 +67,7 @@ class ClaudeCLIEnricher(Enricher):
             return self._run_interactive(binary, transcript, prompt, task, transcript_path)
 
         # Decide inline vs. file-based prompt.
-        with tempfile.TemporaryDirectory(prefix="ux570-cli-") as td:
+        with tempfile.TemporaryDirectory(prefix="whisperlog-cli-") as td:
             tdir = Path(td)
             cwd = tdir
             if len(prompt.encode("utf-8")) > INLINE_LIMIT_BYTES:
@@ -130,11 +130,11 @@ class ClaudeCLIEnricher(Enricher):
         transcript_path: Path | None,
     ) -> EnrichResult:
         # Stage transcript + prompt to a temp dir so the user has both pre-loaded.
-        td = Path(tempfile.mkdtemp(prefix="ux570-cli-int-"))
+        td = Path(tempfile.mkdtemp(prefix="whisperlog-cli-int-"))
         (td / "transcript.txt").write_text(transcript, encoding="utf-8")
         (td / "prompt.md").write_text(prompt, encoding="utf-8")
         readme = (
-            f"# UX570 interactive session\n\n"
+            f"# whisperlog interactive session\n\n"
             f"Task: {task}\n"
             f"Transcript: transcript.txt ({len(transcript)} chars)\n"
             f"Prompt: prompt.md\n\n"
