@@ -1,10 +1,13 @@
-"""Detect Sony ICD-UX570 and copy new recordings into the archive.
+"""Ingest audio recordings into the archive.
 
-Mount-point detection:
+Default flow auto-detects a Sony ICD-UX570 mount:
     macOS: /Volumes/IC RECORDER (or "IC RECORDER 1" if duplicate names exist)
     Linux: /media/$USER/IC* or /run/media/$USER/IC*
+    Sony layout: REC_FILE/FOLDER01..FOLDER05/*.MP3 or *.WAV
 
-Recordings live in REC_FILE/FOLDER01..FOLDER05/*.MP3 or *.WAV.
+Generic mode: pass any directory to ingest_from_path() and it walks recursively.
+If REC_FILE/ is present, the Sony layout is used; otherwise all common audio
+files under the path are picked up.
 """
 
 from __future__ import annotations
@@ -13,6 +16,7 @@ import logging
 import os
 import platform
 import subprocess
+from collections.abc import Iterable
 from datetime import datetime
 from pathlib import Path
 
@@ -28,7 +32,7 @@ logger = logging.getLogger("ux570.ingest")
 
 DEVICE_NAME_HINT = "IC RECORDER"
 RECORDING_DIRNAME = "REC_FILE"
-AUDIO_SUFFIXES = {".mp3", ".wav"}
+AUDIO_SUFFIXES = {".mp3", ".wav", ".m4a", ".mp4", ".flac", ".ogg", ".oga", ".aac", ".opus", ".webm"}
 
 
 def detect_mount_point() -> Path | None:
@@ -54,6 +58,7 @@ def detect_mount_point() -> Path | None:
 
 
 def list_device_recordings(mount: Path) -> list[Path]:
+    """List audio files in the Sony REC_FILE/FOLDER01..05 layout. Returns [] if absent."""
     rec_root = mount / RECORDING_DIRNAME
     if not rec_root.is_dir():
         return []
@@ -65,6 +70,18 @@ def list_device_recordings(mount: Path) -> list[Path]:
             if f.is_file() and f.suffix.lower() in AUDIO_SUFFIXES:
                 files.append(f)
     return files
+
+
+def list_audio_files(root: Path, *, recursive: bool = True) -> list[Path]:
+    """Find audio files under root. Uses Sony REC_FILE layout if present, else walks."""
+    if not root.is_dir():
+        return []
+    if (root / RECORDING_DIRNAME).is_dir():
+        return list_device_recordings(root)
+    walker: Iterable[Path] = root.rglob("*") if recursive else root.iterdir()
+    return sorted(
+        f for f in walker if f.is_file() and f.suffix.lower() in AUDIO_SUFFIXES
+    )
 
 
 def _recorded_at_from_file(p: Path) -> datetime:
@@ -96,12 +113,14 @@ def ingest_file(src: Path) -> tuple[Recording, bool]:
     return rec, True
 
 
+def ingest_from_path(source: Path) -> list[tuple[Recording, bool]]:
+    """Ingest every audio file under source. Sony layout used if REC_FILE/ is present."""
+    return [ingest_file(f) for f in list_audio_files(source)]
+
+
 def ingest_from_mount(mount: Path) -> list[tuple[Recording, bool]]:
-    files = list_device_recordings(mount)
-    results: list[tuple[Recording, bool]] = []
-    for f in files:
-        results.append(ingest_file(f))
-    return results
+    """Backwards-compatible alias. Use ingest_from_path for non-UX570 sources."""
+    return ingest_from_path(mount)
 
 
 def eject(mount: Path) -> bool:

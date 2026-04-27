@@ -43,23 +43,35 @@ def version() -> None:
 
 @app.command()
 def ingest(
+    source: Path | None = typer.Option(
+        None, "--source", help="Directory to ingest from. Default: auto-detect Sony UX570."
+    ),
     eject_after: bool = typer.Option(True, "--eject/--no-eject"),
 ) -> None:
-    """Detect UX570, copy new recordings to the archive, eject."""
-    from .ingest import detect_mount_point, ingest_from_mount
+    """Copy new recordings to the archive. Auto-detects UX570 unless --source is given."""
+    from .ingest import detect_mount_point, ingest_from_path
     from .ingest import eject as do_eject
 
-    mount = detect_mount_point()
-    if not mount:
-        console.print("[yellow]No UX570 detected.[/yellow] "
-                      "Plug it in and confirm it shows up under /Volumes (macOS) or /media (Linux).")
-        raise typer.Exit(code=1)
-    console.print(f"Found device at [cyan]{mount}[/cyan]")
-    results = ingest_from_mount(mount)
+    if source is None:
+        mount = detect_mount_point()
+        if not mount:
+            console.print("[yellow]No UX570 detected.[/yellow] "
+                          "Plug it in, or pass --source <dir> to ingest from any folder.")
+            raise typer.Exit(code=1)
+        console.print(f"Found device at [cyan]{mount}[/cyan]")
+    else:
+        mount = source.expanduser().resolve()
+        if not mount.is_dir():
+            console.print(f"[red]Not a directory:[/red] {mount}")
+            raise typer.Exit(code=1)
+        console.print(f"Ingesting from [cyan]{mount}[/cyan]")
+
+    results = ingest_from_path(mount)
     new = sum(1 for _, is_new in results if is_new)
     total = len(results)
-    console.print(f"Ingested {new} new file(s) ({total} on device)")
-    if eject_after:
+    console.print(f"Ingested {new} new file(s) ({total} found)")
+
+    if eject_after and mount.is_mount():
         if do_eject(mount):
             console.print(f"Ejected {mount}")
         else:
@@ -100,15 +112,24 @@ def transcribe(
 
 @app.command()
 def watch(
+    source: Path | None = typer.Option(
+        None, "--source", help="Watch this directory instead of auto-detecting a UX570."
+    ),
     poll: float = typer.Option(3.0, help="Poll interval in seconds"),
     enrich: bool = typer.Option(False, help="Run default enricher after each transcription"),
     eject_after: bool = typer.Option(True, "--eject/--no-eject"),
     once: bool = typer.Option(False, "--once", help="Run one cycle and exit"),
 ) -> None:
-    """Daemon: ingest+transcribe new recordings whenever the UX570 is plugged in."""
+    """Daemon: ingest+transcribe new recordings.
+
+    Default mode polls for a UX570 mount. With --source <dir>, polls that
+    directory and ingests any new audio files (deduped by SHA-256).
+    """
     from .watch import watch_loop
 
-    watch_loop(poll_secs=poll, enrich=enrich, eject_after=eject_after, once=once)
+    watch_loop(
+        poll_secs=poll, enrich=enrich, eject_after=eject_after, once=once, source=source,
+    )
 
 
 # ----------------------------- search -----------------------------

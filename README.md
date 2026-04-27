@@ -9,6 +9,8 @@ Local-first transcription pipeline for the **Sony ICD-UX570** voice recorder, wi
 
 Plug in a UX570, run `ux570 watch`, and your recordings flow into a local archive: copied off the device, transcribed with Whisper, summarized with a local LLM, and indexed for full-text search. Claude features (summaries, action items, multi-step agent workflows, MCP) are **opt-in** and **per-call** — never silently triggered.
 
+The pipeline is generic — the UX570 is just the default. Pass `--source <dir>` to `ingest` or `watch` to point it at any USB drive, network share, or local folder. If the Sony `REC_FILE/FOLDER01..05` layout is detected the device convention is used; otherwise the directory is walked recursively for any common audio format (`.mp3 .wav .m4a .mp4 .flac .ogg .aac .opus .webm`).
+
 ## Privacy model
 
 There are two modes. The default never makes a network call.
@@ -51,6 +53,10 @@ ux570 transcribe 'archive/**/audio.mp3'
 # Or, in one shot:
 ux570 watch          # daemon: ingest+transcribe whenever the device is plugged in
 ux570 watch --enrich # also runs the default Ollama summarizer
+
+# Any other audio source — a folder, USB drive, network share, etc.:
+ux570 ingest --source ~/Dropbox/voice-memos
+ux570 watch  --source ~/Dropbox/voice-memos --once
 ```
 
 Search later:
