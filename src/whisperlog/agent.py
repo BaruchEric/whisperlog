@@ -8,8 +8,9 @@ agent model (claude-opus-4-7), unless --backend overrides it.
 from __future__ import annotations
 
 import logging
+import os
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal
 
@@ -123,16 +124,16 @@ def _wrap_ics(body: str) -> str:
     b = body.strip()
     if b.startswith("BEGIN:VCALENDAR"):
         return b + ("\n" if not b.endswith("\n") else "")
-    # Fallback: emit a single all-day VEVENT carrying the model's text as DESCRIPTION.
-    today = datetime.now().strftime("%Y%m%dT%H%M%S")
+    # RFC 5545: DTSTAMP must be UTC (Z-suffixed). Naive local time is invalid.
+    stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     description = b.replace("\n", "\\n")[:500]
     return (
         "BEGIN:VCALENDAR\n"
         "VERSION:2.0\n"
         "PRODID:-//whisperlog//agent//EN\n"
         "BEGIN:VEVENT\n"
-        f"UID:{today}@whisperlog\n"
-        f"DTSTAMP:{today}\n"
+        f"UID:{stamp}@whisperlog\n"
+        f"DTSTAMP:{stamp}\n"
         "SUMMARY:Mentioned events (review)\n"
         f"DESCRIPTION:{description}\n"
         "END:VEVENT\n"
@@ -173,7 +174,11 @@ def code_review(
             "Propose concrete code changes referencing files in the repo. "
             "DO NOT modify files yet — just propose.\n\n---\n\n" + text
         )
-        cli.enrich(text, prompt, task="code-review:propose", transcript_path=transcript)
+        propose = cli.enrich(text, prompt, task="code-review:propose", transcript_path=transcript)
+        propose_path = folder / "code_review_propose.md"
+        propose_path.write_text(propose.text + "\n", encoding="utf-8")
+        outputs.append(AgentOutput("code-review-propose", propose_path, propose.text[:200], propose.cost_usd))
+        record_enrichment_for_folder(folder, text, propose)
 
     return outputs
 
@@ -203,7 +208,11 @@ def custom_workflow(
 
     outputs: list[AgentOutput] = []
     for step in spec["steps"]:
-        name = step["name"]
+        name = step.get("name")
+        if not name or not isinstance(name, str):
+            raise ValueError("Each step must have a non-empty 'name'.")
+        _check_safe_filename(name, field="name")
+
         template = step.get("template")
         prompt_inline = step.get("prompt")
         if template:
@@ -215,6 +224,7 @@ def custom_workflow(
             raise ValueError(f"Step '{name}' must specify 'template' or 'prompt'.")
 
         out_filename = step.get("output", f"{name}.md")
+        _check_safe_filename(out_filename, field="output")
         res = enricher.enrich(text, prompt, task=name)
         out_path = folder / out_filename
         out_path.write_text(res.text + "\n", encoding="utf-8")
@@ -222,3 +232,9 @@ def custom_workflow(
         record_enrichment_for_folder(folder, text, res)
 
     return outputs
+
+
+def _check_safe_filename(value: str, *, field: str) -> None:
+    """Reject filenames that would escape the archive folder (path traversal)."""
+    if ".." in value or "/" in value or "\\" in value or os.sep in value:
+        raise ValueError(f"Step {field!r} must be a plain filename, got: {value!r}")

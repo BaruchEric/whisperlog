@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, date, datetime, timedelta
+from datetime import date, datetime, timedelta
 
 from .config import get_settings
 from .db import get_conn, transaction
 from .utils import now_iso
+
+
+class SpendCapExceeded(RuntimeError):
+    pass
 
 # Pricing in USD per 1M tokens. Update if Anthropic prices change.
 # (input_per_mtok, output_per_mtok)
@@ -44,7 +48,13 @@ class SpendSummary:
 
 
 def _today_iso() -> str:
+    # Local day, matching the user-instruction policy that day boundaries
+    # are local midnight, not UTC midnight.
     return date.today().isoformat()
+
+
+def _today_local() -> date:
+    return datetime.now().astimezone().date()
 
 
 def daily_total_usd(day: str | None = None) -> float:
@@ -62,7 +72,7 @@ def remaining_budget_usd() -> float:
 
 
 def assert_within_cap(planned_cost_usd: float) -> None:
-    """Raise if today's spend + planned would exceed the daily cap."""
+    """Pre-flight UX check. Authoritative enforcement happens inside record_spend."""
     cap = get_settings().max_daily_claude_usd
     spent = daily_total_usd()
     if spent + planned_cost_usd > cap + 1e-9:
@@ -79,16 +89,33 @@ def record_spend(
     output_tokens: int,
     cost_usd: float,
 ) -> None:
+    """Insert a spend row, atomically rejecting any insert that would exceed today's cap.
+
+    The cap check and the INSERT happen in the same BEGIN IMMEDIATE transaction so
+    concurrent callers cannot both pass a pre-flight check and then both spend.
+    """
+    cap = get_settings().max_daily_claude_usd
+    day = _today_iso()
     with transaction() as conn:
+        row = conn.execute(
+            "SELECT COALESCE(SUM(cost_usd), 0.0) FROM spend WHERE day = ?",
+            (day,),
+        ).fetchone()
+        spent_so_far = float(row[0])
+        if spent_so_far + cost_usd > cap + 1e-9:
+            raise SpendCapExceeded(
+                f"Daily spend cap ${cap:.2f} would be exceeded "
+                f"(spent ${spent_so_far:.4f}, this call ${cost_usd:.4f})."
+            )
         conn.execute(
             "INSERT INTO spend(day, backend, model, input_tokens, output_tokens, cost_usd, created_at) "
             "VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (_today_iso(), backend, model, input_tokens, output_tokens, cost_usd, now_iso()),
+            (day, backend, model, input_tokens, output_tokens, cost_usd, now_iso()),
         )
 
 
 def summary_last_n_days(n: int) -> list[SpendSummary]:
-    cutoff = (datetime.now(UTC).date() - timedelta(days=n - 1)).isoformat()
+    cutoff = (_today_local() - timedelta(days=n - 1)).isoformat()
     rows = get_conn().execute(
         "SELECT day, "
         "COALESCE(SUM(cost_usd),0) AS total, "
@@ -102,7 +129,3 @@ def summary_last_n_days(n: int) -> list[SpendSummary]:
                      input_tokens=int(r["itok"]), output_tokens=int(r["otok"]))
         for r in rows
     ]
-
-
-class SpendCapExceeded(RuntimeError):
-    pass

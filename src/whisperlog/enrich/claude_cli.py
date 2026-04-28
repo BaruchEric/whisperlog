@@ -45,7 +45,13 @@ class ClaudeCLIEnricher(Enricher):
 
     def _resolve_binary(self) -> str:
         configured = get_settings().claude_cli_path
-        path = shutil.which(configured) or (configured if Path(configured).is_file() else None)
+        path = shutil.which(configured)
+        if path is None:
+            # Only honor the configured value as a literal path if it's absolute,
+            # so a CWD file named "claude" can't hijack the default.
+            cp = Path(configured)
+            if cp.is_absolute() and cp.is_file():
+                path = configured
         if not path:
             raise ClaudeCLINotFound(INSTALL_HINT)
         return path
