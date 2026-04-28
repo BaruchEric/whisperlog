@@ -79,10 +79,14 @@ def safe_copy(src: Path, dst: Path) -> None:
     tmp = dst.with_suffix(dst.suffix + ".part")
     # Avoid shutil.copy2: it calls chflags, which macOS denies in ~/Documents
     # without Full Disk Access. We only need mtime preserved.
-    shutil.copyfile(src, tmp)
-    st = src.stat()
-    os.utime(tmp, (st.st_atime, st.st_mtime))
-    tmp.rename(dst)
+    try:
+        shutil.copyfile(src, tmp)
+        st = src.stat()
+        os.utime(tmp, (st.st_atime, st.st_mtime))
+        tmp.rename(dst)
+    except Exception:
+        tmp.unlink(missing_ok=True)
+        raise
 
 
 def short_hash(s: str, n: int = 8) -> str:
