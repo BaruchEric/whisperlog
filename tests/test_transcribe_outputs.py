@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 from whisperlog import transcribe as tx
 from whisperlog.ingest import ingest_file
 from whisperlog.transcribe import (
@@ -27,10 +25,8 @@ def _fake_result() -> TranscriptionResult:
     )
 
 
-def test_write_outputs_shape(tmp_path: Path):
-    src = tmp_path / "rec.mp3"
-    src.write_bytes(b"ID3\x00\x00\x00fake")
-    rec, _ = ingest_file(src)
+def test_write_outputs_shape(fake_audio):
+    rec, _ = ingest_file(fake_audio())
 
     txt, srt, md = write_outputs(rec, _fake_result(), model_name="small.en")
     assert txt.name == "transcript.txt"
@@ -43,10 +39,8 @@ def test_write_outputs_shape(tmp_path: Path):
     assert "## Transcript" in md_text
 
 
-def test_transcribe_recording_persists(tmp_path: Path, monkeypatch):
-    src = tmp_path / "rec.mp3"
-    src.write_bytes(b"ID3\x00\x00\x00fake")
-    rec, _ = ingest_file(src)
+def test_transcribe_recording_persists(fake_audio, monkeypatch):
+    rec, _ = ingest_file(fake_audio())
 
     monkeypatch.setattr(tx, "transcribe_audio", lambda _path: _fake_result())
     txt, srt, md, result = transcribe_recording(rec)

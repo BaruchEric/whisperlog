@@ -7,13 +7,8 @@ from pathlib import Path
 from whisperlog.ingest import ingest_file, ingest_from_path, list_audio_files
 
 
-def _fake_audio(p: Path) -> Path:
-    p.write_bytes(b"ID3\x00\x00\x00fake-mp3-bytes-deadbeef")
-    return p
-
-
-def test_ingest_file_dedup(tmp_path: Path):
-    src = _fake_audio(tmp_path / "rec1.mp3")
+def test_ingest_file_dedup(fake_audio):
+    src = fake_audio("rec1.mp3")
     rec1, new1 = ingest_file(src)
     assert new1 is True
     assert rec1.archive_path.exists()
@@ -24,10 +19,9 @@ def test_ingest_file_dedup(tmp_path: Path):
     assert rec2.archive_path == rec1.archive_path
 
 
-def test_ingest_different_files(tmp_path: Path):
-    a = _fake_audio(tmp_path / "a.mp3")
-    b = (tmp_path / "b.mp3")
-    b.write_bytes(b"ID3\x00\x00\x00different-bytes-cafebabe")
+def test_ingest_different_files(fake_audio):
+    a = fake_audio("a.mp3")
+    b = fake_audio("b.mp3")
 
     ra, _ = ingest_file(a)
     rb, _ = ingest_file(b)
@@ -43,7 +37,10 @@ def test_list_audio_files_walks_generic_directory(tmp_path: Path):
     b = src / "music" / "song.flac"
     c = src / "voice" / "memo2.MP3"
     notes = src / "notes.txt"
-    a.write_bytes(b"a"); b.write_bytes(b"b"); c.write_bytes(b"c"); notes.write_text("x")
+    a.write_bytes(b"a")
+    b.write_bytes(b"b")
+    c.write_bytes(b"c")
+    notes.write_text("x")
 
     found = list_audio_files(src)
     assert set(found) == {a, b, c}
@@ -67,8 +64,8 @@ def test_ingest_from_path_picks_up_generic_dir(tmp_path: Path):
     src = tmp_path / "uploads"
     nested = src / "nested"
     nested.mkdir(parents=True)
-    _fake_audio(src / "first.mp3")
-    (nested / "second.mp3").write_bytes(b"ID3\x00\x00\x00different-payload")
+    (src / "first.mp3").write_bytes(b"ID3\x00\x00\x00first-payload")
+    (nested / "second.mp3").write_bytes(b"ID3\x00\x00\x00second-payload")
 
     results = ingest_from_path(src)
     assert len(results) == 2

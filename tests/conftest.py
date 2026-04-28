@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -23,3 +24,18 @@ def isolate_dirs(tmp_path: Path, monkeypatch):
     yield
     db.close()
     cfg.reset_settings_for_tests()
+
+
+@pytest.fixture
+def fake_audio(tmp_path: Path) -> Callable[..., Path]:
+    """Write a small fake audio file under tmp_path and return its path.
+
+    Default payload differs per name so two distinct names produce two
+    distinct sha256 hashes (avoiding accidental dedup in tests).
+    """
+    def _make(name: str = "rec.mp3", payload: bytes | None = None) -> Path:
+        p = tmp_path / name
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_bytes(payload if payload is not None else b"ID3\x00\x00\x00fake-" + name.encode())
+        return p
+    return _make
