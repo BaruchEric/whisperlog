@@ -82,3 +82,18 @@ def safe_copy(src: Path, dst: Path) -> None:
 
 def short_hash(s: str, n: int = 8) -> str:
     return s[:n]
+
+
+def require_optional(module: str, extra: str):
+    """Import an optional dependency or raise a uniform install hint.
+
+    `extra` is the pyproject extras name (e.g. "cloud", "agent", "mcp").
+    """
+    import importlib
+
+    try:
+        return importlib.import_module(module)
+    except ImportError as e:
+        raise RuntimeError(
+            f"{module} is not installed. Install: `uv pip install -e '.[{extra}]'`"
+        ) from e

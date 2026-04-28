@@ -23,9 +23,9 @@ from .archive import (
     list_recordings,
     search,
 )
-from .utils import setup_logging
+from .utils import require_optional, setup_logging
 
-logger = logging.getLogger("whisperlog.mcp")
+logger = logging.getLogger(__name__)
 
 
 def _hit_to_dict(h: SearchHit) -> dict[str, Any]:
@@ -53,14 +53,9 @@ def _recent_to_dicts(limit: int) -> list[dict[str, Any]]:
 
 
 async def _serve() -> None:
-    try:
-        from mcp import types
-        from mcp.server import Server
-        from mcp.server.stdio import stdio_server
-    except ImportError as e:
-        raise RuntimeError(
-            "MCP SDK not installed. Install: `uv pip install -e '.[mcp]'`"
-        ) from e
+    types = require_optional("mcp.types", "mcp")
+    Server = require_optional("mcp.server", "mcp").Server
+    stdio_server = require_optional("mcp.server.stdio", "mcp").stdio_server
 
     server = Server("whisperlog")
 
@@ -109,18 +104,24 @@ async def _serve() -> None:
 
     @server.call_tool()
     async def call_tool(name: str, arguments: dict[str, Any]) -> list[types.TextContent]:
-        if name == "search_transcripts":
-            hits = search(arguments["query"], limit=int(arguments.get("limit", 10)))
-            payload = [_hit_to_dict(h) for h in hits]
-        elif name == "get_transcript":
-            text = get_transcript_text(int(arguments["recording_id"]))
-            payload = {"text": text}
-        elif name == "list_recent":
-            payload = _recent_to_dicts(limit=int(arguments.get("limit", 20)))
-        elif name == "list_enrichments":
-            payload = list_enrichments(int(arguments["recording_id"]))
-        else:
-            raise ValueError(f"Unknown tool: {name}")
+        try:
+            if name == "search_transcripts":
+                hits = search(arguments["query"], limit=int(arguments.get("limit", 10)))
+                payload: Any = [_hit_to_dict(h) for h in hits]
+            elif name == "get_transcript":
+                rid = int(arguments["recording_id"])
+                text = get_transcript_text(rid)
+                if text is None:
+                    raise ValueError(f"recording {rid} not found")
+                payload = {"text": text}
+            elif name == "list_recent":
+                payload = _recent_to_dicts(limit=int(arguments.get("limit", 20)))
+            elif name == "list_enrichments":
+                payload = list_enrichments(int(arguments["recording_id"]), with_text=False)
+            else:
+                raise ValueError(f"Unknown tool: {name}")
+        except (KeyError, ValueError, TypeError) as e:
+            return [types.TextContent(type="text", text=f"error: {e}")]
         return [types.TextContent(type="text", text=json.dumps(payload, indent=2))]
 
     async with stdio_server() as (read, write):

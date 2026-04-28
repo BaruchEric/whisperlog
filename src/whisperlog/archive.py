@@ -212,15 +212,22 @@ def recordings_with_transcripts(recording_ids: Iterable[int]) -> set[int]:
     return {int(r["recording_id"]) for r in rows}
 
 
-def list_enrichments(recording_id: int) -> list[dict]:
-    """Past enrichments for a recording, newest first."""
+def list_enrichments(recording_id: int, *, with_text: bool = True) -> list[dict]:
+    """Past enrichments for a recording, newest first.
+
+    `with_text=False` omits the (potentially large) output_text body — use it for
+    listing tools and call get_enrichment_text(id) on demand.
+    """
+    cols = "id, backend, task, model, input_tokens, output_tokens, cost_usd, created_at"
+    if with_text:
+        cols += ", output_text"
     rows = get_conn().execute(
-        "SELECT id, backend, task, model, input_tokens, output_tokens, cost_usd, created_at, output_text "
-        "FROM enrichments WHERE recording_id = ? ORDER BY created_at DESC",
+        f"SELECT {cols} FROM enrichments WHERE recording_id = ? ORDER BY created_at DESC",
         (recording_id,),
     ).fetchall()
-    return [
-        {
+    out = []
+    for r in rows:
+        d = {
             "id": int(r["id"]),
             "backend": r["backend"],
             "task": r["task"],
@@ -229,10 +236,18 @@ def list_enrichments(recording_id: int) -> list[dict]:
             "output_tokens": r["output_tokens"],
             "cost_usd": r["cost_usd"],
             "created_at": r["created_at"],
-            "output_text": r["output_text"],
         }
-        for r in rows
-    ]
+        if with_text:
+            d["output_text"] = r["output_text"]
+        out.append(d)
+    return out
+
+
+def get_enrichment_text(enrichment_id: int) -> str | None:
+    row = get_conn().execute(
+        "SELECT output_text FROM enrichments WHERE id = ?", (enrichment_id,),
+    ).fetchone()
+    return row["output_text"] if row else None
 
 
 def find_recording_for_folder(folder: Path) -> Recording | None:

@@ -17,15 +17,9 @@ import tempfile
 from pathlib import Path
 
 from ..config import get_settings
-from .base import (
-    Backend,
-    Enricher,
-    EnrichResult,
-    audit_cloud_call,
-    log_enrich_call,
-)
+from .base import Backend, Enricher, EnrichResult
 
-logger = logging.getLogger("whisperlog.enrich.claude_cli")
+logger = logging.getLogger(__name__)
 
 INSTALL_HINT = (
     "Claude Code CLI not found on PATH. Install: https://claude.ai/code\n"
@@ -111,20 +105,15 @@ class ClaudeCLIEnricher(Enricher):
 
             text = proc.stdout.strip()
 
-        audit_cloud_call(
-            self.backend, task, None, transcript, transcript_path,
-            input_tokens=0, output_tokens=0, cost_usd=0.0,
-        )
-        log_enrich_call(self.backend, task, None, 0, 0, 0.0)
-
-        return EnrichResult(
-            text=text,
-            backend=self.backend,
+        return self._finalize(
+            transcript=transcript,
+            transcript_path=transcript_path,
             task=task,
             model=None,
-            input_tokens=0,
-            output_tokens=0,
-            cost_usd=0.0,
+            text=text,
+            in_tok=0,
+            out_tok=0,
+            cost=0.0,
         )
 
     def _run_interactive(
@@ -148,20 +137,19 @@ class ClaudeCLIEnricher(Enricher):
         )
         (td / "README.md").write_text(readme, encoding="utf-8")
 
-        audit_cloud_call(
-            self.backend, task, None, transcript, transcript_path,
-            input_tokens=0, output_tokens=0, cost_usd=0.0,
-        )
-        log_enrich_call(self.backend, task + ":interactive", None, 0, 0, 0.0)
-
         argv = [binary, "--add-dir", str(td)]
         logger.info("Launching interactive Claude Code session in %s", td)
         # Inherit stdio so the user can drive Claude Code directly.
         subprocess.run(argv, cwd=str(td))
-        return EnrichResult(
+        return self._finalize(
+            transcript=transcript,
+            transcript_path=transcript_path,
+            task=task + ":interactive",
+            model=None,
             text=f"(interactive session ran in {td})",
-            backend=self.backend,
-            task=task,
+            in_tok=0,
+            out_tok=0,
+            cost=0.0,
             extras={"workdir": str(td)},
         )
 

@@ -14,17 +14,22 @@ import re
 from dataclasses import dataclass
 
 EMAIL_RE = re.compile(r"\b[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}\b")
+# Phone: optional country code, then 3-3-4 with at least one separator-bearing
+# canonical form. Anchor both ends so digit-heavy IDs don't match.
 PHONE_RE = re.compile(
-    r"(?:(?<!\d)\+?\d{1,3}[\s.-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}(?!\d)"
+    r"(?<!\d)(?:\+?\d{1,3}[\s.-]?)?\(?\d{3}\)?[\s.-]\d{3}[\s.-]\d{4}(?!\d)"
 )
 SSN_RE = re.compile(r"\b\d{3}-\d{2}-\d{4}\b")
-CREDIT_RE = re.compile(r"\b(?:\d[ -]?){13,19}\b")
+# Credit card: require separator-bearing groups (raw 13-19-digit blobs are not
+# matched — Luhn would be more accurate but adds dep noise).
+CREDIT_RE = re.compile(r"(?<!\d)(?:\d{4}[ -]){3}\d{3,4}(?!\d)")
 
 
 @dataclass
 class RedactionReport:
     redacted: str
     counts: dict[str, int]
+    ollama_used: bool = False
 
 
 def redact_regex(text: str) -> RedactionReport:
@@ -71,8 +76,13 @@ def redact_with_ollama(text: str) -> str:
 
 
 def redact(text: str, *, use_ollama: bool = False) -> RedactionReport:
-    """Run regex pass; optionally chain Ollama for better recall."""
+    """Run regex pass; optionally chain Ollama for better recall.
+
+    `counts` reflects only the regex pass — Ollama replacements are not counted,
+    which is signaled by `ollama_used`.
+    """
     rep = redact_regex(text)
     if use_ollama:
         rep.redacted = redact_with_ollama(rep.redacted)
+        rep.ollama_used = True
     return rep

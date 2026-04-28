@@ -3,23 +3,33 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 
 import httpx
 
 from ..config import get_settings
-from .base import Backend, Enricher, EnrichResult, log_enrich_call
+from .base import Backend, Enricher, EnrichResult
 
-logger = logging.getLogger("whisperlog.enrich.ollama")
+logger = logging.getLogger(__name__)
 
 
 class OllamaEnricher(Enricher):
     backend: Backend = "ollama"
 
-    def enrich(self, transcript: str, prompt: str, *, task: str, **kwargs) -> EnrichResult:
+    def enrich(
+        self,
+        transcript: str,
+        prompt: str,
+        *,
+        task: str,
+        transcript_path: Path | None = None,
+        **kwargs,
+    ) -> EnrichResult:
         s = get_settings()
         url = s.ollama_host.rstrip("/") + "/api/generate"
+        model = kwargs.get("model") or s.ollama_model
         payload = {
-            "model": kwargs.get("model") or s.ollama_model,
+            "model": model,
             "prompt": prompt,
             "stream": False,
             "options": {
@@ -27,7 +37,7 @@ class OllamaEnricher(Enricher):
                 "num_ctx": kwargs.get("num_ctx", 8192),
             },
         }
-        logger.debug("POST %s model=%s", url, payload["model"])
+        logger.debug("POST %s model=%s", url, model)
         try:
             with httpx.Client(timeout=s.ollama_timeout_secs) as client:
                 resp = client.post(url, json=payload)
@@ -44,15 +54,19 @@ class OllamaEnricher(Enricher):
         input_tokens = int(data.get("prompt_eval_count") or 0)
         output_tokens = int(data.get("eval_count") or 0)
 
-        log_enrich_call(self.backend, task, payload["model"], input_tokens, output_tokens, 0.0)
+        # Don't carry the full Ollama response (which echoes the prompt) into extras.
+        extras = {
+            k: data[k] for k in ("eval_duration", "load_duration", "total_duration") if k in data
+        }
 
-        return EnrichResult(
-            text=text,
-            backend=self.backend,
+        return self._finalize(
+            transcript=transcript,
+            transcript_path=transcript_path,
             task=task,
-            model=payload["model"],
-            input_tokens=input_tokens,
-            output_tokens=output_tokens,
-            cost_usd=0.0,
-            extras={"raw": data},
+            model=model,
+            text=text,
+            in_tok=input_tokens,
+            out_tok=output_tokens,
+            cost=0.0,
+            extras=extras,
         )

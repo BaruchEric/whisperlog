@@ -124,14 +124,45 @@ class Enricher(ABC):
     def enrich(self, transcript: str, prompt: str, *, task: str, **kwargs) -> EnrichResult:
         """Send (transcript, prompt) to the backend; return an EnrichResult."""
 
+    def _finalize(
+        self,
+        *,
+        transcript: str,
+        transcript_path: Path | None,
+        task: str,
+        model: str | None,
+        text: str,
+        in_tok: int,
+        out_tok: int,
+        cost: float,
+        extras: dict | None = None,
+    ) -> EnrichResult:
+        """Common audit + log + EnrichResult tail shared by every backend."""
+        if self.backend != "ollama":
+            audit_cloud_call(
+                self.backend, task, model, transcript, transcript_path,
+                in_tok, out_tok, cost,
+            )
+        log_enrich_call(self.backend, task, model, in_tok, out_tok, cost)
+        return EnrichResult(
+            text=text,
+            backend=self.backend,
+            task=task,
+            model=model,
+            input_tokens=in_tok,
+            output_tokens=out_tok,
+            cost_usd=cost,
+            extras=extras or {},
+        )
 
-def get_enricher(backend: Backend) -> Enricher:
+
+def get_enricher(backend: Backend, *, model: str | None = None) -> Enricher:
     if backend == "ollama":
         from .ollama import OllamaEnricher
         return OllamaEnricher()
     if backend == "claude-api":
         from .claude_api import ClaudeAPIEnricher
-        return ClaudeAPIEnricher()
+        return ClaudeAPIEnricher(model=model)
     if backend == "claude-cli":
         from .claude_cli import ClaudeCLIEnricher
         return ClaudeCLIEnricher()

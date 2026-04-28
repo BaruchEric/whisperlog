@@ -16,9 +16,10 @@ from typing import Literal
 
 from .archive import record_enrichment_for_folder
 from .config import get_settings
-from .enrich import Enricher, EnrichResult, load_prompt_template, render_prompt
+from .enrich import Enricher, EnrichResult, get_enricher, load_prompt_template, render_prompt
+from .utils import require_optional
 
-logger = logging.getLogger("whisperlog.agent")
+logger = logging.getLogger(__name__)
 
 AgentBackend = Literal["claude-api", "claude-cli"]
 
@@ -49,13 +50,10 @@ def _resolve_transcript(transcript: Path) -> tuple[str, Path]:
 
 
 def _enricher_for(backend: AgentBackend, model_override: str | None) -> Enricher:
-    if backend == "claude-api":
-        from .enrich.claude_api import ClaudeAPIEnricher
-        return ClaudeAPIEnricher(model=model_override or get_settings().claude_agent_model)
-    if backend == "claude-cli":
-        from .enrich.claude_cli import ClaudeCLIEnricher
-        return ClaudeCLIEnricher()
-    raise ValueError(f"Agents support claude-api or claude-cli only, got {backend}")
+    if backend not in ("claude-api", "claude-cli"):
+        raise ValueError(f"Agents support claude-api or claude-cli only, got {backend}")
+    model = model_override or (get_settings().claude_agent_model if backend == "claude-api" else None)
+    return get_enricher(backend, model=model)
 
 
 def _run_step(
@@ -192,12 +190,7 @@ def custom_workflow(
     backend: AgentBackend = "claude-api",
     model: str | None = None,
 ) -> list[AgentOutput]:
-    try:
-        import yaml
-    except ImportError as e:
-        raise RuntimeError(
-            "PyYAML required for custom workflows. Install with `[agent]` extras."
-        ) from e
+    yaml = require_optional("yaml", "agent")
 
     text, folder = _resolve_transcript(transcript)
     enricher = _enricher_for(backend, model)
