@@ -49,7 +49,7 @@ def ingest(
     eject_after: bool = typer.Option(True, "--eject/--no-eject"),
 ) -> None:
     """Copy new recordings to the archive. Auto-detects UX570 unless --source is given."""
-    from .ingest import detect_mount_point, ingest_from_path
+    from .ingest import detect_mount_point, ingest_from_path, partition_ingest
     from .ingest import eject as do_eject
 
     if source is None:
@@ -67,9 +67,8 @@ def ingest(
         console.print(f"Ingesting from [cyan]{mount}[/cyan]")
 
     results = ingest_from_path(mount)
-    new = sum(1 for _, is_new in results if is_new)
-    total = len(results)
-    console.print(f"Ingested {new} new file(s) ({total} found)")
+    new_recs, all_recs = partition_ingest(results)
+    console.print(f"Ingested {len(new_recs)} new file(s) ({len(all_recs)} found)")
 
     if eject_after and mount.is_mount():
         if do_eject(mount):

@@ -27,12 +27,12 @@ def _fake_result() -> TranscriptionResult:
     )
 
 
-def test_write_outputs_shape(tmp_path: Path, monkeypatch):
+def test_write_outputs_shape(tmp_path: Path):
     src = tmp_path / "rec.mp3"
     src.write_bytes(b"ID3\x00\x00\x00fake")
     rec, _ = ingest_file(src)
 
-    txt, srt, md = write_outputs(rec, _fake_result())
+    txt, srt, md = write_outputs(rec, _fake_result(), model_name="small.en")
     assert txt.name == "transcript.txt"
     assert srt.name == "transcript.srt"
     assert md.name == "transcript.md"

@@ -84,11 +84,6 @@ def list_audio_files(root: Path, *, recursive: bool = True) -> list[Path]:
     )
 
 
-def _recorded_at_from_file(p: Path) -> datetime:
-    """Sony writes mtime to the recording end time. Good enough for archive bucketing."""
-    return datetime.fromtimestamp(p.stat().st_mtime).astimezone()
-
-
 def ingest_file(src: Path) -> tuple[Recording, bool]:
     """Copy a single audio file into the archive. Returns (record, is_new)."""
     sha = file_sha256(src)
@@ -97,7 +92,9 @@ def ingest_file(src: Path) -> tuple[Recording, bool]:
         logger.debug("Already ingested: %s -> %s", src, existing.archive_path)
         return existing, False
 
-    recorded_at = _recorded_at_from_file(src)
+    st = src.stat()
+    # Sony writes mtime to the recording end time. Good enough for archive bucketing.
+    recorded_at = datetime.fromtimestamp(st.st_mtime).astimezone()
     folder = archive_dir_for(recorded_at, sha, src.suffix.lower())
     dest = folder / f"audio{src.suffix.lower()}"
     safe_copy(src, dest)
@@ -105,7 +102,7 @@ def ingest_file(src: Path) -> tuple[Recording, bool]:
         sha256=sha,
         src_path=src,
         archive_path=dest,
-        size_bytes=src.stat().st_size,
+        size_bytes=st.st_size,
         duration_secs=None,
         recorded_at=recorded_at,
     )
@@ -118,9 +115,13 @@ def ingest_from_path(source: Path) -> list[tuple[Recording, bool]]:
     return [ingest_file(f) for f in list_audio_files(source)]
 
 
-def ingest_from_mount(mount: Path) -> list[tuple[Recording, bool]]:
-    """Backwards-compatible alias. Use ingest_from_path for non-UX570 sources."""
-    return ingest_from_path(mount)
+def partition_ingest(
+    results: list[tuple[Recording, bool]],
+) -> tuple[list[Recording], list[Recording]]:
+    """Split ingest_from_path output into (new_recs, all_recs)."""
+    new_recs = [rec for rec, is_new in results if is_new]
+    all_recs = [rec for rec, _ in results]
+    return new_recs, all_recs
 
 
 def eject(mount: Path) -> bool:

@@ -66,9 +66,7 @@ def transcribe_audio(audio_path: Path) -> TranscriptionResult:
         condition_on_previous_text=False,
         beam_size=5,
     )
-    segs: list[Segment] = []
-    for seg in segments_iter:
-        segs.append(Segment(start=float(seg.start), end=float(seg.end), text=seg.text))
+    segs = [Segment(start=float(seg.start), end=float(seg.end), text=seg.text) for seg in segments_iter]
     full_text = "\n".join(s.text.strip() for s in segs).strip()
     return TranscriptionResult(
         segments=segs,
@@ -78,7 +76,9 @@ def transcribe_audio(audio_path: Path) -> TranscriptionResult:
     )
 
 
-def write_outputs(rec: Recording, result: TranscriptionResult) -> tuple[Path, Path, Path]:
+def write_outputs(
+    rec: Recording, result: TranscriptionResult, *, model_name: str,
+) -> tuple[Path, Path, Path]:
     folder = rec.archive_path.parent
     txt = folder / "transcript.txt"
     srt = folder / "transcript.srt"
@@ -93,7 +93,7 @@ def write_outputs(rec: Recording, result: TranscriptionResult) -> tuple[Path, Pa
         f"- **Source:** `{rec.src_path}`\n"
         f"- **Duration:** {result.duration:.1f}s\n"
         f"- **Language:** {result.language or '?'}\n"
-        f"- **Whisper model:** {get_settings().whisper_model}\n\n"
+        f"- **Whisper model:** {model_name}\n\n"
         "## Transcript\n\n"
     )
     md.write_text(header + result.text + "\n", encoding="utf-8")
@@ -101,23 +101,19 @@ def write_outputs(rec: Recording, result: TranscriptionResult) -> tuple[Path, Pa
 
 
 def transcribe_recording(rec: Recording) -> tuple[Path, Path, Path, TranscriptionResult]:
+    model_name = get_settings().whisper_model
     result = transcribe_audio(rec.archive_path)
-    txt, srt, md = write_outputs(rec, result)
+    txt, srt, md = write_outputs(rec, result, model_name=model_name)
     insert_transcript(
         recording_id=rec.id,
         txt_path=txt,
         srt_path=srt,
         md_path=md,
         language=result.language,
-        model=get_settings().whisper_model,
+        model=model_name,
         text=result.text,
     )
     return txt, srt, md, result
-
-
-def transcribe_path(audio_path: Path) -> TranscriptionResult:
-    """Standalone transcribe — does not enter the archive. For ad-hoc files."""
-    return transcribe_audio(audio_path)
 
 
 def iter_pending(recordings: Iterable[Recording]) -> Iterable[Recording]:

@@ -9,7 +9,13 @@ from pathlib import Path
 from .archive import Recording, append_enrichment_to_md, record_enrichment_for_folder
 from .config import get_settings
 from .enrich import get_enricher, load_prompt_template, render_prompt
-from .ingest import detect_mount_point, eject, ingest_from_path, list_audio_files
+from .ingest import (
+    detect_mount_point,
+    eject,
+    ingest_from_path,
+    list_audio_files,
+    partition_ingest,
+)
 from .transcribe import iter_pending, transcribe_recording
 
 logger = logging.getLogger("whisperlog.watch")
@@ -64,7 +70,19 @@ def watch_loop(
     """Poll for new recordings. Default: UX570 mount. With source: any folder."""
     if source is not None:
         source = source.expanduser().resolve()
-        _watch_source(source, poll_secs=poll_secs, enrich=enrich, once=once)
+        if not source.is_dir():
+            logger.error("Source is not a directory: %s", source)
+            return
+        logger.info("Watching %s for new audio files", source)
+        last_sig: tuple | None = None
+        while True:
+            sig = _source_signature(source)
+            if sig != last_sig:
+                _ingest_and_process(source, enrich=enrich, log_when_empty=False)
+                last_sig = sig
+            if once:
+                return
+            time.sleep(poll_secs)
         return
 
     seen_mount: Path | None = None
@@ -72,11 +90,7 @@ def watch_loop(
         mount = detect_mount_point()
         if mount and mount != seen_mount:
             logger.info("Detected UX570 at %s", mount)
-            results = ingest_from_path(mount)
-            new_recs = [rec for rec, is_new in results if is_new]
-            all_recs = [rec for rec, _ in results]
-            logger.info("Ingested %d new (of %d total)", len(new_recs), len(all_recs))
-            _process_pending(all_recs, enrich=enrich)
+            _ingest_and_process(mount, enrich=enrich, log_when_empty=True)
             if eject_after and eject(mount):
                 logger.info("Ejected %s", mount)
             seen_mount = mount
@@ -88,24 +102,9 @@ def watch_loop(
         time.sleep(poll_secs)
 
 
-def _watch_source(source: Path, *, poll_secs: float, enrich: bool, once: bool) -> None:
-    """Watch a static directory. Re-scans only when (path,mtime,size) signature changes."""
-    if not source.is_dir():
-        logger.error("Source is not a directory: %s", source)
-        return
-    logger.info("Watching %s for new audio files", source)
-    last_sig: tuple | None = None
-    while True:
-        sig = _source_signature(source)
-        if sig != last_sig:
-            results = ingest_from_path(source)
-            new_recs = [rec for rec, is_new in results if is_new]
-            all_recs = [rec for rec, _ in results]
-            if new_recs:
-                logger.info("Ingested %d new (of %d total)", len(new_recs), len(all_recs))
-            _process_pending(all_recs, enrich=enrich)
-            last_sig = sig
-
-        if once:
-            return
-        time.sleep(poll_secs)
+def _ingest_and_process(source: Path, *, enrich: bool, log_when_empty: bool) -> None:
+    results = ingest_from_path(source)
+    new_recs, all_recs = partition_ingest(results)
+    if new_recs or log_when_empty:
+        logger.info("Ingested %d new (of %d total)", len(new_recs), len(all_recs))
+    _process_pending(all_recs, enrich=enrich)
