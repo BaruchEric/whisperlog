@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import os
 import shutil
 import sys
 from datetime import UTC, datetime
@@ -76,7 +77,11 @@ def safe_copy(src: Path, dst: Path) -> None:
         return
     dst.parent.mkdir(parents=True, exist_ok=True)
     tmp = dst.with_suffix(dst.suffix + ".part")
-    shutil.copy2(src, tmp)
+    # Avoid shutil.copy2: it calls chflags, which macOS denies in ~/Documents
+    # without Full Disk Access. We only need mtime preserved.
+    shutil.copyfile(src, tmp)
+    st = src.stat()
+    os.utime(tmp, (st.st_atime, st.st_mtime))
     tmp.rename(dst)
 
 
